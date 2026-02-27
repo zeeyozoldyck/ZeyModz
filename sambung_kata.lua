@@ -1018,6 +1018,14 @@ local function SaveConfiguration()
 	callSafely(writefile, ConfigurationFolder .. "/" .. CFileName .. ConfigurationExtension, tostring(HttpService:JSONEncode(Data)))
 end
 
+function ZeyModzLibrary:ClearNotifications()
+	for _, child in ipairs(Notifications:GetChildren()) do
+		if child:IsA("Frame") and child.Name ~= "Template" then
+			child:Destroy()
+		end
+	end
+end
+
 function ZeyModzLibrary:Notify(data)
 	if ZeyModzLibrary.NotificationsDisabled then return end
 	task.spawn(function()
@@ -3751,7 +3759,8 @@ local Config = {
     SelectionPos = Vector2.new(0.4, 0.7),
     SelectionSize = Vector2.new(0.2, 0.1),
     IsScanning = false,
-    HideNotifications = false
+    HideNotifications = false,
+    AutoAnswer = false
 }
 
 local WordList = {}
@@ -3988,7 +3997,7 @@ local function PerformScan()
 end
 
 local Window = ZeyModz:CreateWindow({
-   Name = "ZeyModz V4 - Sambung Kata",
+   Name = "ZeyModz - Sambung Kata",
    LoadingTitle = "ZeyModz RBLX",
    LoadingSubtitle = "by Zey",
    ConfigurationSaving = {Enabled = false},
@@ -4006,6 +4015,17 @@ MainTab:CreateToggle({
       Config.Enabled = Value
       if Value then
           ZeyModz:Notify({Title = "ZeyModz ON", Content = "Press SPACE to scan & answer!", Duration = 3})
+      end
+   end,
+})
+
+MainTab:CreateToggle({
+   Name = "Auto Answer",
+   CurrentValue = false,
+   Callback = function(Value)
+      Config.AutoAnswer = Value
+      if Value then
+          ZeyModz:Notify({Title = "Auto Answer ON", Content = "Script will answer automatically!", Duration = 3})
       end
    end,
 })
@@ -4037,14 +4057,11 @@ MainTab:CreateToggle({
       Config.HideNotifications = Value
       ZeyModz.NotificationsDisabled = Value
       if Value then
-          for _, child in ipairs(Notifications:GetChildren()) do
-             if child:IsA("Frame") and child.Name ~= "Template" then
-                child:Destroy()
-             end
-          end
+          ZeyModz:ClearNotifications()
       end
    end,
 })
+
 
 
 MainTab:CreateLabel("Keybind : Space to answer")
@@ -4076,9 +4093,46 @@ if not loadSuccess then
 end
 
 ZeyModz:Notify({
-   Title = "ZeyModz V4 Ready",
+   Title = "ZeyModz Ready",
    Content = count .. " words loaded. Have fun!",
    Duration = 5,
 })
 
+task.spawn(function()
+    while task.wait(0.5) do
+        if Config.Enabled and Config.AutoAnswer and not Config.IsScanning then
+            local promptLabel = nil
+            local absPos = SelectionFrame.AbsolutePosition
+            local absSize = SelectionFrame.AbsoluteSize
+            
+            for _, desc in ipairs(PlayerGui:GetDescendants()) do
+                if desc:IsA("TextLabel") and desc.Visible then
+                    local p = desc.AbsolutePosition
+                    local s = desc.AbsoluteSize
+                    local center = Vector2.new(p.X + s.X/2, p.Y + s.Y/2)
+                    if center.X >= absPos.X and center.X <= (absPos.X + absSize.X) and
+                       center.Y >= absPos.Y and center.Y <= (absPos.Y + absSize.Y) then
+                        local txt = desc.Text:gsub("%s+", ""):upper()
+                        if #txt >= 1 and #txt <= 5 and txt:match("^%a+$") then
+                            if not txt:find("ZEY") and not txt:find("SKOR") then
+                                promptLabel = desc
+                                break
+                            end
+                        end
+                    end
+                end
+            end
 
+            if promptLabel then
+                PerformScan()
+                task.wait(1.5)
+                if promptLabel and promptLabel:IsDescendantOf(game) and promptLabel.Visible then
+                    for i = 1, 30 do
+                        PressKey(Enum.KeyCode.Backspace)
+                        task.wait(0.01)
+                    end
+                end
+            end
+        end
+    end
+end)
